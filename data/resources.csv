@@ -1,0 +1,12 @@
+resource_id,name,type,capacity,building,floor,amenities,status,created_at
+ROOM-0001,Study Room 1,study-room,1,Library,3,table;chair;power-outlets,available,2025-08-01 09:00:00
+ROOM-0002,Study Room 2,study-room,4,Library,1,whiteboard;table;chairs;power-outlets,available,2025-08-01 09:00:00
+ROOM-0003,Study Room 3,study-room,4,Library,1,whiteboard;table;chairs;power-outlets,available,2025-08-01 09:00:00
+ROOM-0004,Study Room 4,study-room,6,Library,3,whiteboard;table;chairs;power-outlets,available,2025-08-01 09:00:00
+ROOM-0005,Study Room 5,study-room,6,Library,2,whiteboard;table;chairs;power-outlets,available,2025-08-01 09:00:00
+ROOM-0006,Conference Room 1,conf-room,12,Library,1,whiteboard;tv-display;screen-sharing;table;chairs;power-outlets,available,2025-08-01 09:00:00
+ROOM-0007,Conference Room 2,conf-room,14,Library,1,whiteboard;tv-display;screen-sharing;table;chairs;power-outlets,available,2025-08-01 09:00:00
+ROOM-0008,Conference Room 3,conf-room,15,Library,1,whiteboard;tv-display;screen-sharing;table;chairs;power-outlets,available,2025-08-01 09:00:00
+ROOM-0009,Conference Room 4,conf-room,16,Library,3,whiteboard;tv-display;screen-sharing;table;chairs;power-outlets,maintenance,2025-08-01 09:00:00
+ROOM-0010,Conference Room 5,conf-room,18,Library,1,whiteboard;tv-display;screen-sharing;table;chairs;power-outlets,available,2025-08-01 09:00:00
+ROOM-0011,Computer Lab A,c-lab,50,Library,2,computers;printers;adjustable-chairs;power-outlets,available,2025-08-01 
