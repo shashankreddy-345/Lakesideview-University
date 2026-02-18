@@ -24,11 +24,12 @@ export default function StudentPortal() {
   // Fetch resources and bookings from API
   useEffect(() => {
     const fetchData = async () => {
+      const API_URL = import.meta.env.VITE_API_URL || '';
       try {
         setLoading(true);
         const [resResponse, bookingsResponse] = await Promise.all([
-          fetch('/api/resources'),
-          fetch('/api/bookings')
+          fetch(`${API_URL}/api/resources`),
+          fetch(`${API_URL}/api/bookings`)
         ]);
         
         if (!resResponse.ok || !bookingsResponse.ok) {
@@ -132,8 +133,9 @@ export default function StudentPortal() {
       return;
     }
 
+    const API_URL = import.meta.env.VITE_API_URL || '';
     try {
-      const response = await fetch('/api/bookings', {
+      const response = await fetch(`${API_URL}/api/bookings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -150,7 +152,7 @@ export default function StudentPortal() {
         setShowBookingModal(false);
         alert('Booking confirmed! You will receive a confirmation email shortly.');
         // Refresh bookings to update availability
-        const bookingsRes = await fetch('/api/bookings');
+        const bookingsRes = await fetch(`${API_URL}/api/bookings`);
         const bookingsData = await bookingsRes.json();
         setBookings(bookingsData);
         
@@ -169,8 +171,9 @@ export default function StudentPortal() {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const studentId = user._id || user.user_id || user.studentId || localStorage.getItem('userId');
     
+    const API_URL = import.meta.env.VITE_API_URL || '';
     try {
-      await fetch('/api/feedback', {
+      await fetch(`${API_URL}/api/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

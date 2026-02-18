@@ -20,7 +20,8 @@ export default function MyBookings() {
       return;
     }
 
-    fetch(`/api/bookings/${studentId}`)
+    const API_URL = import.meta.env.VITE_API_URL || '';
+    fetch(`${API_URL}/api/bookings/${studentId}`)
       .then(res => res.json())
       .then(data => {
         const mapped = data.map((b: any) => {
@@ -73,8 +74,9 @@ export default function MyBookings() {
   const submitRating = async () => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const studentId = user._id || user.user_id || user.studentId || localStorage.getItem('userId');
+    const API_URL = import.meta.env.VITE_API_URL || '';
     try {
-      await fetch('/api/feedback', {
+      await fetch(`${API_URL}/api/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
