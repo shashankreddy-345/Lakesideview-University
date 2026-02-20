@@ -31,20 +31,23 @@ export default function AdminDashboard() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [feedbackData, setFeedbackData] = useState<Feedback[]>([]);
+  const [waitlistData, setWaitlistData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       const API_URL = import.meta.env.VITE_API_URL || '';
       try {
-        const [resourcesData, bookingsResponse, feedbackResponse] = await Promise.all([
+        const [resourcesData, bookingsResponse, feedbackResponse, waitlistResponse] = await Promise.all([
           store.getResources(),
           fetch(`${API_URL}/api/bookings?_t=${Date.now()}`),
-          fetch(`${API_URL}/api/feedback?_t=${Date.now()}`)
+          fetch(`${API_URL}/api/feedback?_t=${Date.now()}`),
+          fetch(`${API_URL}/api/waitlist?_t=${Date.now()}`)
         ]);
 
         const bookingsData = await bookingsResponse.json();
         const feedbackResData = await feedbackResponse.json();
+        const waitlistResData = await waitlistResponse.json();
 
         // Map MongoDB _id to frontend id
         const mappedBookings = bookingsData.map((b: any) => ({ ...b, id: b._id }));
@@ -53,6 +56,7 @@ export default function AdminDashboard() {
         setResources(resourcesData);
         setBookings(mappedBookings);
         setFeedbackData(mappedFeedback);
+        setWaitlistData(waitlistResData);
       } catch (error) {
         console.error("Failed to fetch dashboard data", error);
       } finally {
@@ -63,6 +67,7 @@ export default function AdminDashboard() {
   }, []);
 
   // Calculate Analytics
+  const today = format(new Date(), 'yyyy-MM-dd');
   const totalUtilizationRate = resources.length > 0 
     ? Math.round(resources.reduce((acc, r) => acc + r.utilization, 0) / resources.length) 
     : 0;
@@ -71,8 +76,18 @@ export default function AdminDashboard() {
     ? (feedbackData.reduce((acc, f) => acc + f.rating, 0) / feedbackData.length).toFixed(1)
     : "0.0";
 
+  const allocatedToday = waitlistData.filter((w: any) => w.status === 'allocated' && w.date === today);
+  const avgWaitingTime = allocatedToday.length > 0
+    ? Math.round(
+        allocatedToday.reduce((acc: number, w: any) => {
+            const [startH, startM] = w.startTime.split(':').map(Number);
+            const [endH, endM] = w.endTime.split(':').map(Number);
+            return acc + ((endH * 60 + endM) - (startH * 60 + startM));
+          }, 0) / allocatedToday.length
+      )
+    : 0;
+
   // Calculate Peak Hours from bookings
-  const today = format(new Date(), 'yyyy-MM-dd');
   const peakHoursMap = new Array(14).fill(0); // 8AM to 10PM
   bookings.forEach(b => {
     if (b.status === 'cancelled') return;
@@ -161,9 +176,6 @@ export default function AdminDashboard() {
             <div className="p-3 bg-primary/10 rounded-lg">
               <Activity className="w-6 h-6 text-primary" />
             </div>
-            <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
-              +5.2% from last week
-            </span>
           </div>
           <h3 className="text-sm text-muted-foreground mb-1">Total Resource Utilization Rate</h3>
           <div className="flex items-end gap-2">
@@ -175,27 +187,8 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-xl shadow-md p-6 border border-border">
           <div className="flex items-start justify-between mb-4">
             <div className="p-3 bg-primary/10 rounded-lg">
-              <Clock className="w-6 h-6 text-primary" />
-            </div>
-            <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
-              -2 min from last week
-            </span>
-          </div>
-          <h3 className="text-sm text-muted-foreground mb-1">Average Waiting Time</h3>
-          <div className="flex items-end gap-2">
-            <span className="text-3xl">12</span>
-            <span className="text-sm text-muted-foreground mb-1">minutes</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-md p-6 border border-border">
-          <div className="flex items-start justify-between mb-4">
-            <div className="p-3 bg-primary/10 rounded-lg">
               <Star className="w-6 h-6 text-primary" />
             </div>
-            <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
-              +0.3 from last week
-            </span>
           </div>
           <h3 className="text-sm text-muted-foreground mb-1">Student Satisfaction Score</h3>
           <div className="flex items-end gap-2">
@@ -306,7 +299,6 @@ export default function AdminDashboard() {
                   <p className="text-sm text-foreground">{feedback.comment}</p>
                 </div>
                 <div className="text-right ml-4">
-                  <p className="text-xs text-muted-foreground">Student ID: {feedback.studentId}</p>
                   <p className="text-xs text-muted-foreground">{feedback.date}</p>
                 </div>
               </div>
