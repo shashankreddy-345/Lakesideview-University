@@ -2,18 +2,17 @@ import { Star, Heart, MapPin, Users, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Resource } from "../types";
+import { store } from "../store";
 
 export default function Favorites() {
   const navigate = useNavigate();
   const [favorites, setFavorites] = useState<Resource[]>([]);
 
   useEffect(() => {
-    fetch('/api/resources')
-      .then(res => res.json())
+    store.getResources()
       .then(data => {
-        const mapped = data.map((r: any) => ({ ...r, id: r._id }));
         // Simulate favorites by picking the first 3 resources
-        setFavorites(mapped.slice(0, 3));
+        setFavorites(data.slice(0, 3));
       })
       .catch(err => console.error(err));
   }, []);

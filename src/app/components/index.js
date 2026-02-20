@@ -16,10 +16,10 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/campus-re
   .catch(err => console.error('MongoDB connection error:', err));
 
 // Models
-const Resource = require('./models/Resource');
-const Booking = require('./models/Booking');
-const User = require('./models/User');
-const Feedback = require('./models/Feedback');
+const Resource = require('./Resource');
+const Booking = require('./Booking');
+const User = require('./User');
+const Feedback = require('./Feedback');
 
 // Routes
 
@@ -29,25 +29,41 @@ app.get('/api/resources', async (req, res) => {
     const resources = await Resource.find().lean();
     const bookings = await Booking.find({ status: { $ne: 'cancelled' } });
 
+    // Calculate total unique days across ALL bookings to establish the time window
+    const allDates = new Set(bookings.map(b => b.date));
+    const totalDays = Math.max(1, allDates.size);
+
     const resourcesWithUtilization = resources.map(resource => {
       const resourceBookings = bookings.filter(b => 
         (b.resource && b.resource.toString() === resource._id.toString()) || 
         (b.resourceId && b.resourceId.toString() === resource._id.toString())
       );
 
-      // Group bookings by time slot to calculate average occupancy per active hour
-      const slots = {};
-      resourceBookings.forEach(b => {
-        const key = `${b.date}-${b.startTime}`;
-        slots[key] = (slots[key] || 0) + 1;
+      // Logic: Average Hourly Utilization
+      // For every hour: (number of bookings / capacity)
+      let totalHourlyUtilization = 0;
+      let totalHours = 0;
+
+      allDates.forEach(date => {
+        for (let hour = 8; hour < 22; hour++) {
+          const slotStart = hour;
+          const slotEnd = hour + 1;
+
+          const bookingsInHour = resourceBookings.filter(b => {
+            if (b.date !== date) return false;
+            const [sH, sM] = b.startTime.split(':').map(Number);
+            const [eH, eM] = b.endTime.split(':').map(Number);
+            const start = sH + sM / 60;
+            const end = eH + eM / 60;
+            return start < slotEnd && end > slotStart;
+          }).length;
+
+          totalHourlyUtilization += Math.min(1, bookingsInHour / (resource.capacity || 1));
+          totalHours++;
+        }
       });
 
-      const uniqueSlots = Object.keys(slots).length;
-      const totalBookings = resourceBookings.length;
-      const avgBookingsPerHour = uniqueSlots > 0 ? totalBookings / uniqueSlots : 0;
-
-      // Utilization = (Avg Bookings per Hour / Max Capacity) * 100
-      let utilization = Math.round((avgBookingsPerHour / (resource.capacity || 1)) * 100);
+      let utilization = totalHours > 0 ? Math.round((totalHourlyUtilization / totalHours) * 100) : 0;
       utilization = Math.min(utilization, 100);
 
       let status = 'optimal';
@@ -57,6 +73,16 @@ app.get('/api/resources', async (req, res) => {
       return { ...resource, utilization, status };
     });
     res.json(resourcesWithUtilization);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get all bookings
+app.get('/api/bookings', async (req, res) => {
+  try {
+    const bookings = await Booking.find().sort({ date: 1, startTime: 1 });
+    res.json(bookings);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -125,5 +151,9 @@ app.post('/api/login', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
 
 module.exports = app;

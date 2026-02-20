@@ -1,5 +1,7 @@
 import { Resource, Booking } from './types';
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 // Store to handle data transformation and calculations
 export const store = {
   // Fetch resources and calculate utilization dynamically
@@ -7,8 +9,8 @@ export const store = {
     try {
       // Fetch both resources and bookings to calculate utilization
       const [resourcesRes, bookingsRes] = await Promise.all([
-        fetch('/api/resources'),
-        fetch('/api/bookings')
+        fetch(`${API_URL}/api/resources`),
+        fetch(`${API_URL}/api/bookings`)
       ]);
 
       if (!resourcesRes.ok || !bookingsRes.ok) {
@@ -17,6 +19,10 @@ export const store = {
 
       const rawResources = await resourcesRes.json();
       const rawBookings = await bookingsRes.json();
+
+      // Calculate total unique days across ALL bookings to establish the time window
+      const allDates = new Set(rawBookings.map((b: any) => b.date));
+      const totalDays = Math.max(1, allDates.size);
 
       // Transform raw data into frontend-ready format
       return rawResources.map((r: any) => {
@@ -27,16 +33,31 @@ export const store = {
         );
 
         // 2. Calculate Utilization Percentage
-        // Logic: (Occupancy / Capacity Ratio)
-        // We assume a standard weekly operating window (e.g., 40 slots) to normalize the ratio
-        // If capacity is high, the resource can handle more bookings before becoming "over-utilized"
-        const weeklySlots = 40; 
-        const occupancy = resourceBookings.length;
-        
-        // Utilization = (Active Bookings / (Weekly Slots * Capacity Factor)) * 100
-        // We use capacity as a factor: larger rooms expect more traffic
-        const capacityFactor = Math.max(1, r.capacity / 10); 
-        const utilization = Math.min(100, Math.round((occupancy / (weeklySlots * capacityFactor)) * 100));
+        // Logic: Average Hourly Utilization
+        // For every hour: (number of bookings / capacity)
+        let totalHourlyUtilization = 0;
+        let totalHours = 0;
+
+        allDates.forEach((date: any) => {
+          for (let hour = 8; hour < 22; hour++) {
+            const slotStart = hour;
+            const slotEnd = hour + 1;
+
+            const bookingsInHour = resourceBookings.filter((b: any) => {
+              if (b.date !== date) return false;
+              const [sH, sM] = b.startTime.split(':').map(Number);
+              const [eH, eM] = b.endTime.split(':').map(Number);
+              const start = sH + sM / 60;
+              const end = eH + eM / 60;
+              return start < slotEnd && end > slotStart;
+            }).length;
+
+            totalHourlyUtilization += Math.min(1, bookingsInHour / (r.capacity || 1));
+            totalHours++;
+          }
+        });
+
+        const utilization = totalHours > 0 ? Math.min(100, Math.round((totalHourlyUtilization / totalHours) * 100)) : 0;
 
         // 3. Determine Status based on Utilization
         let status: 'optimal' | 'over-utilized' | 'under-utilized' = 'optimal';
@@ -65,7 +86,7 @@ export const store = {
   // Fetch bookings for a specific student
   getBookings: async (studentId: string): Promise<Booking[]> => {
     try {
-      const res = await fetch(`/api/bookings/${studentId}`);
+      const res = await fetch(`${API_URL}/api/bookings/${studentId}`);
       if (!res.ok) throw new Error('Failed to fetch bookings');
       const data = await res.json();
       

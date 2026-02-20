@@ -1,6 +1,7 @@
 import { AlertCircle, CheckCircle, AlertTriangle, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Resource } from "../types";
+import { store } from "../store";
 import {
   BarChart,
   Bar,
@@ -9,22 +10,15 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
 } from "recharts";
 
 export default function PredictiveInsights() {
   const [resources, setResources] = useState<Resource[]>([]);
 
   useEffect(() => {
-    fetch('/api/resources')
-      .then(res => res.json())
+    store.getResources()
       .then(data => {
-        const mapped = data.map((r: any) => ({ ...r, id: r._id }));
-        setResources(mapped);
+        setResources(data);
       })
       .catch(err => console.error("Failed to fetch resources", err));
   }, []);
@@ -40,11 +34,29 @@ export default function PredictiveInsights() {
     type: r.type
   }));
 
-  const typeComparison = [
-    { type: 'Study Rooms', current: 85, predicted: 90, capacity: 100 },
-    { type: 'VR Labs', current: 62, predicted: 68, capacity: 100 },
-    { type: 'Tutoring Centers', current: 52, predicted: 58, capacity: 100 },
-  ];
+  // Calculate dynamic type comparison based on actual resources
+  const typeStats: Record<string, { totalUtil: number, count: number }> = {};
+  resources.forEach(r => {
+    if (!typeStats[r.type]) {
+      typeStats[r.type] = { totalUtil: 0, count: 0 };
+    }
+    typeStats[r.type].totalUtil += r.utilization;
+    typeStats[r.type].count += 1;
+  });
+
+  const typeComparison = Object.keys(typeStats).map(type => {
+    const avgUtil = Math.round(typeStats[type].totalUtil / typeStats[type].count);
+    let name = type;
+    if (type === 'study-room') name = 'Study Rooms';
+    else if (type === 'c-lab') name = 'Computer Labs';
+    else if (type === 'conf-room') name = 'Conference Rooms';
+    
+    return {
+      type: name,
+      current: avgUtil,
+      capacity: 100
+    };
+  });
 
   return (
     <div className="p-6 md:p-8 bg-background">
@@ -97,7 +109,7 @@ export default function PredictiveInsights() {
       {/* Detailed Resource Analysis */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow-md p-6 border border-border">
-          <h3 className="text-lg mb-4">Current vs Predicted Utilization</h3>
+          <h3 className="text-lg mb-4">Current Utilization</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={typeComparison}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
@@ -105,27 +117,7 @@ export default function PredictiveInsights() {
               <YAxis stroke="#6B7280" />
               <Tooltip />
               <Bar dataKey="current" fill="#003DA5" name="Current %" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="predicted" fill="#4A90E2" name="Predicted %" radius={[4, 4, 0, 0]} />
             </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-md p-6 border border-border">
-          <h3 className="text-lg mb-4">Resource Performance Radar</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <RadarChart data={[
-              { metric: 'Availability', value: 78 },
-              { metric: 'Satisfaction', value: 90 },
-              { metric: 'Booking Speed', value: 85 },
-              { metric: 'Utilization', value: 72 },
-              { metric: 'Capacity', value: 68 },
-            ]}>
-              <PolarGrid stroke="#E5E7EB" />
-              <PolarAngleAxis dataKey="metric" stroke="#6B7280" />
-              <PolarRadiusAxis stroke="#6B7280" />
-              <Radar name="Performance" dataKey="value" stroke="#003DA5" fill="#003DA5" fillOpacity={0.3} />
-              <Tooltip />
-            </RadarChart>
           </ResponsiveContainer>
         </div>
       </div>

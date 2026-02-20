@@ -22,6 +22,8 @@ import {
 } from "recharts";
 import { useState, useEffect } from "react";
 import { Resource, Booking, Feedback } from "../types";
+import { store } from "../store";
+import { format } from "date-fns";
 
 const COLORS = ['#003DA5', '#0066CC', '#4A90E2', '#7FB3FF', '#B8D4FF'];
 
@@ -33,23 +35,22 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
+      const API_URL = import.meta.env.VITE_API_URL || '';
       try {
-        const [resResponse, bookingsResponse, feedbackResponse] = await Promise.all([
-          fetch('/api/resources'),
-          fetch('/api/bookings'),
-          fetch('/api/feedback')
+        const [resourcesData, bookingsResponse, feedbackResponse] = await Promise.all([
+          store.getResources(),
+          fetch(`${API_URL}/api/bookings`),
+          fetch(`${API_URL}/api/feedback`)
         ]);
 
-        const resData = await resResponse.json();
         const bookingsData = await bookingsResponse.json();
         const feedbackResData = await feedbackResponse.json();
 
         // Map MongoDB _id to frontend id
-        const mappedResources = resData.map((r: any) => ({ ...r, id: r._id }));
         const mappedBookings = bookingsData.map((b: any) => ({ ...b, id: b._id }));
         const mappedFeedback = feedbackResData.map((f: any) => ({ ...f, id: f._id }));
 
-        setResources(mappedResources);
+        setResources(resourcesData);
         setBookings(mappedBookings);
         setFeedbackData(mappedFeedback);
       } catch (error) {
@@ -71,18 +72,35 @@ export default function AdminDashboard() {
     : "0.0";
 
   // Calculate Peak Hours from bookings
-  const peakHoursMap = new Array(12).fill(0); // 8AM to 7PM
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const peakHoursMap = new Array(14).fill(0); // 8AM to 10PM
   bookings.forEach(b => {
-    const hour = parseInt(b.startTime.split(':')[0]);
-    if (hour >= 8 && hour <= 19) {
-      peakHoursMap[hour - 8]++;
+    if (b.status === 'cancelled') return;
+    if (b.date !== today) return;
+    
+    const [startH, startM] = b.startTime.split(':').map(Number);
+    const [endH, endM] = b.endTime.split(':').map(Number);
+    const start = startH + startM / 60;
+    const end = endH + endM / 60;
+
+    for (let i = 0; i < 14; i++) {
+      const slotStart = 8 + i;
+      const slotEnd = slotStart + 1;
+      if (start < slotEnd && end > slotStart) {
+        peakHoursMap[i]++;
+      }
     }
   });
   
-  const peakHoursData = peakHoursMap.map((count, i) => ({
-    hour: `${i + 8}${i + 8 < 12 ? 'AM' : 'PM'}`,
-    bookings: count
-  }));
+  const peakHoursData = peakHoursMap.map((count, i) => {
+    const h = i + 8;
+    const hour12 = h > 12 ? h - 12 : h;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    return {
+      hour: `${hour12}${ampm}`,
+      bookings: count
+    };
+  });
 
   // Calculate Resource Type Distribution
   const typeDist: Record<string, number> = { 'study-room': 0, 'c-lab': 0, 'conf-room': 0 };

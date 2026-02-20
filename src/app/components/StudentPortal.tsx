@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Search, Filter, MapPin, Users, Star, Calendar, X, Check } from "lucide-react";
 import { Resource } from "../types";
 import { format, addDays, startOfWeek } from "date-fns";
+import { store } from "../store";
 
 type ResourceType = string;
 
@@ -27,21 +28,19 @@ export default function StudentPortal() {
       const API_URL = import.meta.env.VITE_API_URL || '';
       try {
         setLoading(true);
-        const [resResponse, bookingsResponse] = await Promise.all([
-          fetch(`${API_URL}/api/resources`),
+        const [resourcesData, bookingsResponse] = await Promise.all([
+          store.getResources(),
           fetch(`${API_URL}/api/bookings`)
         ]);
         
-        if (!resResponse.ok || !bookingsResponse.ok) {
-          throw new Error(`API Error: ${resResponse.status} ${resResponse.statusText}`);
+        if (!bookingsResponse.ok) {
+          throw new Error(`API Error: ${bookingsResponse.status} ${bookingsResponse.statusText}`);
         }
 
-        const resData = await resResponse.json();
         const bookingsData = await bookingsResponse.json();
 
         // Map MongoDB _id to frontend id
-        const mappedResources = resData.map((r: any) => ({ ...r, id: r._id }));
-        setResources(mappedResources);
+        setResources(resourcesData);
         setBookings(bookingsData);
         setError(null);
       } catch (error: any) {

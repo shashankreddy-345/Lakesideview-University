@@ -1,4 +1,4 @@
-import { Star, MessageSquare } from "lucide-react";
+import { Star, MessageSquare, Search, Filter, ArrowUpDown } from "lucide-react";
 import { useState, useEffect } from "react";
 import {
   ResponsiveContainer,
@@ -20,10 +20,14 @@ import {
 export default function FeedbackMonitor() {
   const [feedbackData, setFeedbackData] = useState<any[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterRating, setFilterRating] = useState<number | 'all'>('all');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const itemsPerPage = 5;
 
   useEffect(() => {
-    fetch('/api/feedback')
+    const API_URL = import.meta.env.VITE_API_URL || '';
+    fetch(`${API_URL}/api/feedback`)
       .then(res => res.json())
       .then(data => setFeedbackData(data))
       .catch(() => setFeedbackData([]));
@@ -41,11 +45,27 @@ export default function FeedbackMonitor() {
     ? (feedbackData.reduce((sum, f) => sum + f.rating, 0) / feedbackData.length).toFixed(1)
     : "0.0";
 
-  const totalPages = Math.ceil(feedbackData.length / itemsPerPage);
-  const paginatedFeedback = feedbackData.slice(
+  const filteredFeedback = feedbackData
+    .filter(item => {
+      const matchesSearch = (item.comment?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
+                            (item.studentId?.toLowerCase() || "").includes(searchQuery.toLowerCase());
+      const matchesRating = filterRating === 'all' || item.rating === filterRating;
+      return matchesSearch && matchesRating;
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+
+  const totalPages = Math.ceil(filteredFeedback.length / itemsPerPage);
+  const paginatedFeedback = filteredFeedback.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
+  // Reset page when filters change
+  useEffect(() => setCurrentPage(1), [searchQuery, filterRating, sortOrder]);
 
   return (
     <div className="p-6 md:p-8 bg-background">
@@ -96,9 +116,54 @@ export default function FeedbackMonitor() {
 
       {/* Feedback List */}
       <div className="bg-white rounded-xl shadow-md p-6 border border-border">
-        <h3 className="text-lg mb-4">Student Reviews ({feedbackData.length})</h3>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+          <h3 className="text-lg">Student Reviews ({filteredFeedback.length})</h3>
+          
+          <div className="flex flex-wrap gap-2 w-full md:w-auto">
+            <div className="relative flex-1 md:flex-none">
+              <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full md:w-48"
+              />
+            </div>
+            
+            <div className="relative flex-1 md:flex-none">
+              <Filter className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <select
+                value={filterRating}
+                onChange={(e) => setFilterRating(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                className="pl-9 pr-8 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none bg-white cursor-pointer w-full"
+              >
+                <option value="all">All Stars</option>
+                <option value="5">5 Stars</option>
+                <option value="4">4 Stars</option>
+                <option value="3">3 Stars</option>
+                <option value="2">2 Stars</option>
+                <option value="1">1 Star</option>
+              </select>
+            </div>
+
+            <div className="relative flex-1 md:flex-none">
+              <ArrowUpDown className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as 'newest' | 'oldest')}
+                className="pl-9 pr-8 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none bg-white cursor-pointer w-full"
+              >
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div className="space-y-4">
-          {paginatedFeedback.map((feedback) => (
+          {paginatedFeedback.length > 0 ? (
+            paginatedFeedback.map((feedback) => (
             <div key={feedback.id} className="border border-border rounded-lg p-4 hover:bg-accent/30 transition-colors">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
@@ -120,12 +185,14 @@ export default function FeedbackMonitor() {
                   <p className="text-sm text-foreground">{feedback.comment}</p>
                 </div>
                 <div className="text-right ml-4">
-                  <p className="text-xs text-muted-foreground">ID: {feedback.studentId}</p>
                   <p className="text-xs text-muted-foreground">{feedback.date}</p>
                 </div>
               </div>
             </div>
-          ))}
+            ))
+          ) : (
+            <p className="text-center text-muted-foreground py-8">No reviews found matching your criteria.</p>
+          )}
         </div>
         
         {totalPages > 1 && (
