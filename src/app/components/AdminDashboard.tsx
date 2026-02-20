@@ -39,8 +39,8 @@ export default function AdminDashboard() {
       try {
         const [resourcesData, bookingsResponse, feedbackResponse] = await Promise.all([
           store.getResources(),
-          fetch(`${API_URL}/api/bookings`),
-          fetch(`${API_URL}/api/feedback`)
+          fetch(`${API_URL}/api/bookings?_t=${Date.now()}`),
+          fetch(`${API_URL}/api/feedback?_t=${Date.now()}`)
         ]);
 
         const bookingsData = await bookingsResponse.json();

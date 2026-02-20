@@ -2,6 +2,7 @@ import { Calendar, MapPin, Clock, Users, X, Star } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Booking } from "../types";
 import { format, addDays } from "date-fns";
+import { store } from "../store";
 
 export default function MyBookings() {
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -21,51 +22,96 @@ export default function MyBookings() {
     }
 
     const API_URL = import.meta.env.VITE_API_URL || '';
-    fetch(`${API_URL}/api/bookings/${studentId}`)
-      .then(res => res.json())
-      .then(data => {
-        const mapped = data.map((b: any) => {
+    
+    const fetchData = async () => {
+      try {
+        const [resourcesData, bookingsResponse] = await Promise.all([
+          store.getResources(),
+          fetch(`${API_URL}/api/bookings?_t=${Date.now()}`)
+        ]);
+
+        if (!bookingsResponse.ok) throw new Error('Failed to fetch bookings');
+        
+        const bookingsData = await bookingsResponse.json();
+        
+        // Filter bookings for current student
+        const userBookings = bookingsData.filter((b: any) => {
+          const bStudentId = typeof b.studentId === 'object' ? b.studentId?._id : b.studentId;
+          // Ensure both are strings for comparison
+          return String(bStudentId) === String(studentId);
+        });
+
+        const mapped = userBookings.map((b: any) => {
+          // Resolve resource details
+          const rId = typeof b.resourceId === 'object' ? b.resourceId._id : b.resourceId;
+          const resource = resourcesData.find((r: any) => r.id === rId || r._id === rId);
+
           let status = b.status;
           
-          if (status !== 'cancelled') {
+          if (status !== 'cancelled' && status !== 'completed') {
             const [hours, minutes] = b.endTime.split(':');
-            const paddedTime = `${hours.padStart(2, '0')}:${minutes}`;
-            const bookingEnd = new Date(`${b.date}T${paddedTime}`);
+            const [y, m, d] = b.date.split('-').map(Number);
+            const bookingEnd = new Date(y, m - 1, d, parseInt(hours), parseInt(minutes));
             const now = new Date();
             
             if (now > bookingEnd) {
               status = 'completed';
-            } else {
+            } else if (!status) {
               status = 'upcoming';
             }
           }
 
           return {
             id: b._id,
-            resourceId: b.resourceId?._id || 'unknown',
-            resourceName: b.resourceId?.name || 'Unknown Resource',
-            building: b.resourceId?.building || 'Unknown Building',
-            floor: b.resourceId?.floor || 1,
+            resourceId: rId,
+            resourceName: resource?.name || b.resourceName || 'Unknown Resource',
+            building: resource?.building || 'Unknown Building',
+            floor: resource?.floor || 1,
             date: b.date,
             startTime: b.startTime,
             endTime: b.endTime,
-            status: status
+            status: status || 'upcoming'
           };
         });
+        
+        // Sort by date (newest first)
+        mapped.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
         setBookings(mapped);
-      })
-      .catch(() => setBookings([]));
+      } catch (error) {
+        console.error("Failed to load bookings:", error);
+        setBookings([]);
+      }
+    };
+
+    fetchData();
   }, []);
 
   const filteredBookings = bookings.filter(b => 
     filterStatus === 'all' || b.status === filterStatus
   );
 
-  const handleCancelBooking = () => {
+  const handleCancelBooking = async () => {
     if (selectedBooking) {
-      setBookings(bookings.map(b => 
-        b.id === selectedBooking.id ? { ...b, status: 'cancelled' as const } : b
-      ));
+      const API_URL = import.meta.env.VITE_API_URL || '';
+      try {
+        const response = await fetch(`${API_URL}/api/bookings/${selectedBooking.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'cancelled' })
+        });
+
+        if (response.ok) {
+          setBookings(bookings.map(b => 
+            b.id === selectedBooking.id ? { ...b, status: 'cancelled' as const } : b
+          ));
+        } else {
+          alert('Failed to cancel booking. Please try again.');
+        }
+      } catch (error) {
+        console.error("Error cancelling booking:", error);
+        alert("An error occurred while cancelling booking.");
+      }
       setShowCancelModal(false);
       setSelectedBooking(null);
     }
@@ -75,28 +121,40 @@ export default function MyBookings() {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const studentId = user._id || user.user_id || user.studentId || localStorage.getItem('userId');
     const API_URL = import.meta.env.VITE_API_URL || '';
+
+    const feedbackPayload = {
+      _id: `FDBK-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      studentId: studentId || 'Anonymous',
+      rating,
+      comment: feedback,
+      date: format(new Date(), 'yyyy-MM-dd')
+    };
+
     try {
-      await fetch(`${API_URL}/api/feedback`, {
+      const response = await fetch(`${API_URL}/api/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: studentId || 'Anonymous',
-          rating,
-          comment: feedback,
-          date: format(new Date(), 'yyyy-MM-dd')
-        })
+        body: JSON.stringify(feedbackPayload)
       });
-      setShowRatingModal(false);
-      alert('Thank you for your feedback!');
-      setRating(0);
-      setFeedback("");
+      
+      if (response.ok) {
+        setShowRatingModal(false);
+        alert('Thank you for your feedback!');
+        setRating(0);
+        setFeedback("");
+      } else {
+        console.error("Feedback submission failed");
+        alert("Failed to submit feedback. Please try again.");
+      }
     } catch (error) {
       console.error("Error submitting feedback:", error);
+      alert("An error occurred while submitting feedback.");
     }
   };
 
   const upcomingCount = bookings.filter(b => b.status === 'upcoming').length;
   const completedCount = bookings.filter(b => b.status === 'completed').length;
+  const totalActiveCount = upcomingCount + completedCount;
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6">
@@ -140,7 +198,7 @@ export default function MyBookings() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total</p>
-              <p className="text-2xl">{bookings.length}</p>
+              <p className="text-2xl">{totalActiveCount}</p>
             </div>
           </div>
         </div>

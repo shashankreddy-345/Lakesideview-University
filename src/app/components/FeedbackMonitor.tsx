@@ -27,7 +27,7 @@ export default function FeedbackMonitor() {
 
   useEffect(() => {
     const API_URL = import.meta.env.VITE_API_URL || '';
-    fetch(`${API_URL}/api/feedback`)
+    fetch(`${API_URL}/api/feedback?_t=${Date.now()}`)
       .then(res => res.json())
       .then(data => setFeedbackData(data))
       .catch(() => setFeedbackData([]));

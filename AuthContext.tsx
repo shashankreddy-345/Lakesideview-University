@@ -1,8 +1,18 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
+export interface User {
+  _id: string;
+  name: string;
+  email: string;
+  role: string;
+  studentId?: string;
+  [key: string]: any;
+}
+
 interface AuthContextType {
   isAuthenticated: boolean;
-  login: () => void;
+  user: User | null;
+  login: (user: User) => void;
   logout: () => void;
 }
 
@@ -21,15 +31,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return localStorage.getItem('isAuthenticated') === 'true';
   });
 
+  const [user, setUser] = useState<User | null>(() => {
+    const savedUser = localStorage.getItem('user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+
   const logout = useCallback(() => {
     setIsAuthenticated(false);
+    setUser(null);
     localStorage.removeItem('isAuthenticated');
+    localStorage.removeItem('user');
     localStorage.removeItem('lastActivity');
   }, []);
 
-  const login = useCallback(() => {
+  const login = useCallback((userData: User) => {
+    // Map _id to studentId if not present, ensuring the ID (e.g., LSV-0001) is available
+    const userToSave = {
+      ...userData,
+      studentId: userData.studentId || userData._id
+    };
+
     setIsAuthenticated(true);
+    setUser(userToSave);
     localStorage.setItem('isAuthenticated', 'true');
+    localStorage.setItem('user', JSON.stringify(userToSave));
     localStorage.setItem('lastActivity', Date.now().toString());
   }, []);
 
@@ -71,7 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [isAuthenticated, logout]);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

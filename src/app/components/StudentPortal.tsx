@@ -26,6 +26,7 @@ export default function StudentPortal() {
   useEffect(() => {
     const fetchData = async () => {
       const API_URL = import.meta.env.VITE_API_URL || '';
+      console.log("Connected to Backend API:", API_URL || "Localhost (Relative path)");
       try {
         setLoading(true);
         const [resourcesData, bookingsResponse] = await Promise.all([
@@ -132,33 +133,44 @@ export default function StudentPortal() {
       return;
     }
 
+    if (!selectedResource || !selectedSlot) {
+      alert("Please select a resource and time slot.");
+      return;
+    }
+
     const API_URL = import.meta.env.VITE_API_URL || '';
+    
+    const bookingPayload = {
+      _id: `BKGN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      studentId: studentId,
+      resourceId: selectedResource,
+      date: selectedSlot.date,
+      startTime: selectedSlot.startTime,
+      endTime: selectedSlot.endTime,
+      status: 'upcoming'
+    };
+
     try {
       const response = await fetch(`${API_URL}/api/bookings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: studentId,
-          resourceId: selectedResource,
-          date: selectedSlot.date,
-          startTime: selectedSlot.startTime,
-          endTime: selectedSlot.endTime,
-          status: 'upcoming'
-        })
+        body: JSON.stringify(bookingPayload)
       });
 
       if (response.ok) {
         setShowBookingModal(false);
         alert('Booking confirmed! You will receive a confirmation email shortly.');
         // Refresh bookings to update availability
-        const bookingsRes = await fetch(`${API_URL}/api/bookings`);
+        const bookingsRes = await fetch(`${API_URL}/api/bookings?_t=${Date.now()}`);
         const bookingsData = await bookingsRes.json();
         setBookings(bookingsData);
         
         // Simulate session end for demo purposes to show rating modal
         setTimeout(() => setShowRatingModal(true), 2000);
       } else {
-        alert('Failed to book slot. Please try again.');
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        console.error("Booking failed:", errorData);
+        alert(`Failed to book slot: ${errorData.message || 'Please try again.'}`);
       }
     } catch (error) {
       console.error("Booking error:", error);
@@ -171,22 +183,32 @@ export default function StudentPortal() {
     const studentId = user._id || user.user_id || user.studentId || localStorage.getItem('userId');
     
     const API_URL = import.meta.env.VITE_API_URL || '';
+
+    const feedbackPayload = {
+      _id: `FDBK-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      studentId: studentId || 'Anonymous',
+      rating,
+      comment: feedback,
+      date: format(new Date(), 'yyyy-MM-dd')
+    };
+
     try {
-      await fetch(`${API_URL}/api/feedback`, {
+      const response = await fetch(`${API_URL}/api/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: studentId || 'Anonymous',
-          rating,
-          comment: feedback,
-          date: format(new Date(), 'yyyy-MM-dd')
-        })
+        body: JSON.stringify(feedbackPayload)
       });
       
-      setShowRatingModal(false);
-      alert('Thank you for your feedback!');
-      setRating(0);
-      setFeedback("");
+      if (response.ok) {
+        setShowRatingModal(false);
+        alert('Thank you for your feedback!');
+        setRating(0);
+        setFeedback("");
+      } else {
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        console.error("Feedback failed:", errorData);
+        alert(`Failed to submit feedback: ${errorData.message || 'Please try again.'}`);
+      }
     } catch (error) {
       console.error("Feedback error:", error);
       alert('Failed to submit feedback.');
