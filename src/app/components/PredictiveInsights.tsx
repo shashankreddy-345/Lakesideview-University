@@ -63,7 +63,7 @@ export default function PredictiveInsights() {
       <div className="mb-8">
         <h1 className="text-3xl mb-2">Insights</h1>
         <p className="text-muted-foreground">
-          AI-powered forecasting and strategic recommendations for resource optimization
+          Forecasting resource optimization
         </p>
       </div>
 

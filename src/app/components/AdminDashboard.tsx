@@ -165,7 +165,7 @@ export default function AdminDashboard() {
       <div className="mb-8">
         <h1 className="text-3xl mb-2">Analytics Overview</h1>
         <p className="text-muted-foreground">
-          Real-time insights into campus resource utilization and student engagement
+          Real-time insights into campus resource utilization and student Feedback
         </p>
       </div>
 

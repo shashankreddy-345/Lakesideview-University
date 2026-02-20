@@ -236,7 +236,7 @@ export default function StudentPortal() {
       <div className="mb-6">
         <h1 className="text-3xl mb-2">Book Campus Resources</h1>
         <p className="text-muted-foreground">
-          Find and reserve study rooms, VR labs, and tutoring sessions
+          Find and reserve study rooms, computer labs, and conference rooms
         </p>
       </div>
 
