@@ -140,7 +140,7 @@ export default function HomePage() {
 
           <div className="mt-6 text-center">
             <a href="#" className="text-sm text-primary hover:underline">
-              Forgot your password?
+              User Name is email, Password is password123
             </a>
           </div>
 
