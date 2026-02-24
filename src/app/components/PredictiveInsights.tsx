@@ -2,6 +2,7 @@ import { AlertCircle, CheckCircle, AlertTriangle, ArrowUp, ArrowDown, Minus } fr
 import { useState, useEffect } from "react";
 import { Resource } from "../types";
 import { store } from "../store";
+import { format, subDays, differenceInCalendarDays } from "date-fns";
 import {
   BarChart,
   Bar,
@@ -14,13 +15,28 @@ import {
 
 export default function PredictiveInsights() {
   const [resources, setResources] = useState<Resource[]>([]);
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [startDate, setStartDate] = useState(subDays(new Date(), 6));
+  const [endDate, setEndDate] = useState(new Date());
 
   useEffect(() => {
-    store.getResources()
-      .then(data => {
-        setResources(data);
-      })
-      .catch(err => console.error("Failed to fetch resources", err));
+    const fetchData = async () => {
+      const API_URL = import.meta.env.VITE_API_URL || '';
+      try {
+        const [resourcesData, bookingsResponse] = await Promise.all([
+          store.getResources(),
+          fetch(`${API_URL}/api/bookings?_t=${Date.now()}`)
+        ]);
+        
+        if (bookingsResponse.ok) {
+          setBookings(await bookingsResponse.json());
+        }
+        setResources(resourcesData);
+      } catch (err) {
+        console.error("Failed to fetch data", err);
+      }
+    };
+    fetchData();
   }, []);
 
   const overUtilized = resources.filter(r => r.status === 'over-utilized');
@@ -34,18 +50,47 @@ export default function PredictiveInsights() {
     type: r.type
   }));
 
-  // Calculate dynamic type comparison based on actual resources
-  const typeStats: Record<string, { totalUtil: number, count: number }> = {};
+  // Calculate utilization based on date range and bookings
+  const typeStats: Record<string, { totalCapacity: number, totalBooked: number }> = {};
+  
+  // Initialize stats
   resources.forEach(r => {
     if (!typeStats[r.type]) {
-      typeStats[r.type] = { totalUtil: 0, count: 0 };
+      typeStats[r.type] = { totalCapacity: 0, totalBooked: 0 };
     }
-    typeStats[r.type].totalUtil += r.utilization;
-    typeStats[r.type].count += 1;
+  });
+
+  const startStr = format(startDate, 'yyyy-MM-dd');
+  const endStr = format(endDate, 'yyyy-MM-dd');
+  const dayCount = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
+
+  // Calculate capacity (14 hours * 60 mins per day)
+  resources.forEach(r => {
+    if (typeStats[r.type]) {
+      typeStats[r.type].totalCapacity += (14 * 60 * dayCount);
+    }
+  });
+
+  // Calculate booked minutes
+  bookings.forEach(b => {
+    if (b.status === 'cancelled') return;
+    if (b.date < startStr || b.date > endStr) return;
+    
+    const rId = typeof b.resourceId === 'object' ? b.resourceId._id : b.resourceId;
+    const resource = resources.find(r => r.id === rId || r._id === rId);
+    
+    if (resource && typeStats[resource.type]) {
+      const [startH, startM] = b.startTime.split(':').map(Number);
+      const [endH, endM] = b.endTime.split(':').map(Number);
+      const duration = (endH * 60 + endM) - (startH * 60 + startM);
+      typeStats[resource.type].totalBooked += duration;
+    }
   });
 
   const typeComparison = Object.keys(typeStats).map(type => {
-    const avgUtil = Math.round(typeStats[type].totalUtil / typeStats[type].count);
+    const stats = typeStats[type];
+    const util = stats.totalCapacity > 0 ? Math.round((stats.totalBooked / stats.totalCapacity) * 100) : 0;
+
     let name = type;
     if (type === 'study-room') name = 'Study Rooms';
     else if (type === 'c-lab') name = 'Computer Labs';
@@ -53,10 +98,11 @@ export default function PredictiveInsights() {
     
     return {
       type: name,
-      current: avgUtil,
+      current: util,
       capacity: 100
     };
   });
+
 
   return (
     <div className="p-6 md:p-8 bg-background">
@@ -109,7 +155,24 @@ export default function PredictiveInsights() {
       {/* Detailed Resource Analysis */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow-md p-6 border border-border">
-          <h3 className="text-lg mb-4">Current Utilization</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg">Utilization by Type</h3>
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                value={format(startDate, 'yyyy-MM-dd')}
+                onChange={(e) => setStartDate(new Date(e.target.value))}
+                className="border border-border rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <span className="text-muted-foreground">-</span>
+              <input 
+                type="date" 
+                value={format(endDate, 'yyyy-MM-dd')}
+                onChange={(e) => setEndDate(new Date(e.target.value))}
+                className="border border-border rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={typeComparison}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />

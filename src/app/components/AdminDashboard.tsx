@@ -23,7 +23,7 @@ import {
 import { useState, useEffect } from "react";
 import { Resource, Booking, Feedback } from "../types";
 import { store } from "../store";
-import { format } from "date-fns";
+import { format, addDays, subDays, eachDayOfInterval } from "date-fns";
 
 const COLORS = ['#003DA5', '#0066CC', '#4A90E2', '#7FB3FF', '#B8D4FF'];
 
@@ -33,6 +33,10 @@ export default function AdminDashboard() {
   const [feedbackData, setFeedbackData] = useState<Feedback[]>([]);
   const [waitlistData, setWaitlistData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [trendStartDate, setTrendStartDate] = useState(subDays(new Date(), 6));
+  const [trendEndDate, setTrendEndDate] = useState(new Date());
+  const [peakStartDate, setPeakStartDate] = useState(subDays(new Date(), 6));
+  const [peakEndDate, setPeakEndDate] = useState(new Date());
 
   useEffect(() => {
     const fetchData = async () => {
@@ -91,7 +95,10 @@ export default function AdminDashboard() {
   const peakHoursMap = new Array(14).fill(0); // 8AM to 10PM
   bookings.forEach(b => {
     if (b.status === 'cancelled') return;
-    if (b.date !== today) return;
+    
+    const startStr = format(peakStartDate, 'yyyy-MM-dd');
+    const endStr = format(peakEndDate, 'yyyy-MM-dd');
+    if (b.date < startStr || b.date > endStr) return;
     
     const [startH, startM] = b.startTime.split(':').map(Number);
     const [endH, endM] = b.endTime.split(':').map(Number);
@@ -144,16 +151,36 @@ export default function AdminDashboard() {
     utilization: Math.round(buildingMap[b].total / buildingMap[b].count)
   }));
 
-  // Generate Trend Data (Simulated based on current rate for visualization)
-  const utilizationTrend = [
-    { date: 'Mon', rate: Math.max(0, totalUtilizationRate - 5) },
-    { date: 'Tue', rate: Math.max(0, totalUtilizationRate - 2) },
-    { date: 'Wed', rate: Math.min(100, totalUtilizationRate + 3) },
-    { date: 'Thu', rate: totalUtilizationRate },
-    { date: 'Fri', rate: Math.max(0, totalUtilizationRate - 8) },
-    { date: 'Sat', rate: Math.max(0, totalUtilizationRate - 15) },
-    { date: 'Sun', rate: Math.max(0, totalUtilizationRate - 20) },
-  ];
+  // Calculate Utilization Trend based on actual bookings
+  let utilizationTrend: any[] = [];
+  try {
+    utilizationTrend = eachDayOfInterval({ start: trendStartDate, end: trendEndDate }).map((date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    let dailyUtilization = 0;
+    if (resources.length > 0) {
+      const dayBookings = bookings.filter(b => b.date === dateStr && b.status !== 'cancelled');
+      const bookedMinutes = dayBookings.reduce((acc, b) => {
+        const [startH, startM] = b.startTime.split(':').map(Number);
+        const [endH, endM] = b.endTime.split(':').map(Number);
+        return acc + ((endH * 60 + endM) - (startH * 60 + startM));
+      }, 0);
+      
+      // Capacity: resources * 14 hours (8am-10pm) * 60 mins
+      const totalCapacityMinutes = resources.length * 14 * 60;
+      dailyUtilization = totalCapacityMinutes > 0 ? Math.round((bookedMinutes / totalCapacityMinutes) * 100) : 0;
+    }
+
+    return {
+      date: format(date, 'EEE'),
+      fullDate: dateStr,
+      rate: dailyUtilization
+    };
+  });
+  } catch (e) {
+    // Handle invalid interval (start > end)
+    utilizationTrend = [];
+  }
 
   if (loading) {
     return <div className="p-8 flex justify-center text-muted-foreground">Loading analytics...</div>;
@@ -202,9 +229,26 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Utilization Trend */}
         <div className="bg-white rounded-xl shadow-md p-6 border border-border">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="w-5 h-5 text-primary" />
-            <h3 className="text-lg">Weekly Utilization Trend</h3>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-primary" />
+              <h3 className="text-lg">Utilization Trend</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                value={format(trendStartDate, 'yyyy-MM-dd')}
+                onChange={(e) => setTrendStartDate(new Date(e.target.value))}
+                className="border border-border rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <span className="text-muted-foreground">-</span>
+              <input 
+                type="date" 
+                value={format(trendEndDate, 'yyyy-MM-dd')}
+                onChange={(e) => setTrendEndDate(new Date(e.target.value))}
+                className="border border-border rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
           </div>
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={utilizationTrend}>
@@ -225,9 +269,26 @@ export default function AdminDashboard() {
 
         {/* Peak Hours */}
         <div className="bg-white rounded-xl shadow-md p-6 border border-border">
-          <div className="flex items-center gap-2 mb-4">
-            <Activity className="w-5 h-5 text-primary" />
-            <h3 className="text-lg">Peak Booking Hours</h3>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Activity className="w-5 h-5 text-primary" />
+              <h3 className="text-lg">Peak Booking Hours</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                value={format(peakStartDate, 'yyyy-MM-dd')}
+                onChange={(e) => setPeakStartDate(new Date(e.target.value))}
+                className="border border-border rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <span className="text-muted-foreground">-</span>
+              <input 
+                type="date" 
+                value={format(peakEndDate, 'yyyy-MM-dd')}
+                onChange={(e) => setPeakEndDate(new Date(e.target.value))}
+                className="border border-border rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
           </div>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={peakHoursData}>
